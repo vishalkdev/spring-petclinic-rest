@@ -7,6 +7,7 @@ DROP TABLE types IF EXISTS;
 DROP TABLE owners IF EXISTS;
 DROP TABLE roles IF EXISTS;
 DROP TABLE users IF EXISTS;
+DROP TABLE outbox_event IF EXISTS;
 
 
 CREATE TABLE vets (
@@ -80,3 +81,21 @@ CREATE TABLE roles (
 ALTER TABLE roles ADD CONSTRAINT fk_username FOREIGN KEY (username) REFERENCES users (username);
 CREATE INDEX fk_username_idx ON roles (username);
 
+CREATE TABLE outbox_event (
+  id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  event_id        VARCHAR(36)   NOT NULL UNIQUE,
+  subject         VARCHAR(64)   NOT NULL,
+  event_type      VARCHAR(80)   NOT NULL,
+  cause           VARCHAR(64),
+  payload         VARCHAR(4000) NOT NULL,
+  status          VARCHAR(16)   NOT NULL,
+  attempts        INTEGER       DEFAULT 0 NOT NULL,
+  next_attempt_at TIMESTAMP     NOT NULL,
+  locked_until    TIMESTAMP,
+  locked_by       VARCHAR(64),
+  last_error      VARCHAR(1000),
+  created_at      TIMESTAMP     NOT NULL,
+  delivered_at    TIMESTAMP
+);
+CREATE INDEX idx_outbox_due ON outbox_event (status, next_attempt_at);
+CREATE INDEX idx_outbox_subject ON outbox_event (subject, status, id);

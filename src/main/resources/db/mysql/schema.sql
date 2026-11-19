@@ -70,3 +70,22 @@ CREATE TABLE IF NOT EXISTS roles (
   KEY fk_username_idx (username),
   CONSTRAINT fk_username FOREIGN KEY (username) REFERENCES users (username)
 ) engine=InnoDB;
+
+CREATE TABLE IF NOT EXISTS outbox_event (
+  id              BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  event_id        VARCHAR(36)   NOT NULL UNIQUE,
+  subject         VARCHAR(64)   NOT NULL,
+  event_type      VARCHAR(80)   NOT NULL,
+  cause           VARCHAR(64),
+  payload         VARCHAR(4000) NOT NULL,
+  status          VARCHAR(16)   NOT NULL,
+  attempts        INTEGER       DEFAULT 0 NOT NULL,
+  next_attempt_at DATETIME(6)     NOT NULL,
+  locked_until    DATETIME(6),
+  locked_by       VARCHAR(64),
+  last_error      VARCHAR(1000),
+  created_at      DATETIME(6)     NOT NULL,
+  delivered_at    DATETIME(6),
+  INDEX idx_outbox_due (status, next_attempt_at),
+  INDEX idx_outbox_subject (subject, status, id)
+) engine=InnoDB;

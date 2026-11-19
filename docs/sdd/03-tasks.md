@@ -21,7 +21,7 @@ Status: draft.
 
 ## Progress
 
-- [ ] T1
+- [x] T1
 - [ ] T2
 - [ ] T3
 - [ ] T4

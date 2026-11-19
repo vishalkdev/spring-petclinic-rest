@@ -60,6 +60,7 @@ MySQL uses `AUTO_INCREMENT` and `DATETIME(6)`. Access is through `JdbcTemplate` 
 ## Recording
 
 `ChangeRecorder` runs inside the existing service transaction (`Propagation.MANDATORY`), after the business write.
+Under JPA it first flushes the persistence context, because Hibernate otherwise delays `UPDATE`/`DELETE` until commit. Without the flush the event row would get its sequence before the business row is locked, which breaks the ordering argument in D3.
 
 | Method | Events |
 |---|---|

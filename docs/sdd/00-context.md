@@ -42,6 +42,7 @@ All writes go through `@Transactional` methods in `ClinicServiceImpl`. The v2 co
 - **F4** There is no version column to order events by.
 - **F5** The generated DTOs are the REST contract, not an integration contract.
 - **F6** A new table means editing four schema files.
+- **F7** *(found in T1)* `Pet.type` used `cascade = ALL`, so under JPA deleting a pet or owner also tried to delete the shared pet type and failed. Two existing tests hid this by catching the exception.
 
 ## Questions for requirements
 

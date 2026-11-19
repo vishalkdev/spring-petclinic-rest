@@ -36,7 +36,8 @@ public class Pet extends NamedEntity {
     @NotNull
     private LocalDate birthDate;
 
-    @ManyToOne(cascade = CascadeType.ALL)
+    // PERSIST/MERGE only: cascading REMOVE to a shared PetType made deleting a pet or owner fail under JPA.
+    @ManyToOne(cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     @JoinColumn(name = "type_id")
     private PetType type;
 

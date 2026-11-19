@@ -4,6 +4,7 @@ Why the specification changed during the work. Newest first.
 
 | Date | File | Change | Trigger |
 |---|---|---|---|
+| 2026-11-19 | 00-context.md, 01-requirements.md | Condensed for readability (00 went in with the design commit); no requirement, decision or ID changed | Docs were too long to review quickly |
 | 2026-11-19 | 02-design.md, ADR-001..006 | Initial design and ADRs | Step 2; answers OQ-1..OQ-7 |
 | 2026-11-19 | 01-requirements.md | FR-7: pet events also carry `typeName` | Found while designing payloads: without pet type events, `typeId` alone means nothing to the consumer |
 | 2026-11-19 | 01-requirements.md | Initial requirements: FR-1..9, NFR-1..15, CR-1..6, A1..11, R1..8, OQ-1..7 | Step 1 |

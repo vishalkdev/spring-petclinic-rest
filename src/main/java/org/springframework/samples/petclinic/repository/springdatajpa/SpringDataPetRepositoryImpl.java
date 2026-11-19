@@ -38,8 +38,12 @@ public class SpringDataPetRepositoryImpl implements PetRepositoryOverride {
 		String petId = pet.getId().toString();
 		this.em.createQuery("DELETE FROM Visit visit WHERE pet.id=" + petId).executeUpdate();
 		this.em.createQuery("DELETE FROM Pet pet WHERE id=" + petId).executeUpdate();
+        // the rows are already gone: unlink and detach the in-memory copy (detach cascades to its visits)
         if (em.contains(pet)) {
-            em.remove(pet);
+            if (pet.getOwner() != null) {
+                pet.getOwner().removePet(pet);
+            }
+            em.detach(pet);
         }
 	}
 

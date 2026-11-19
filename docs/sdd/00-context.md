@@ -43,6 +43,7 @@ All writes go through `@Transactional` methods in `ClinicServiceImpl`. The v2 co
 - **F5** The generated DTOs are the REST contract, not an integration contract.
 - **F6** A new table means editing four schema files.
 - **F7** *(found in T1)* `Pet.type` used `cascade = ALL`, so under JPA deleting a pet or owner also tried to delete the shared pet type and failed. Two existing tests hid this by catching the exception.
+- **F8** *(found in T4)* Under JPA, deleting a pet or visit while its parent still held it in a `cascade = ALL` collection let Hibernate re-persist it at flush. With the `jpa` profile a visit delete likely never reached the database; with Spring Data JPA the row was bulk-deleted but a stale copy stayed in the session. Fixed by unlinking the child from its parent first (`Owner.removePet`, `Pet.removeVisit`) and detaching instead of removing after a bulk delete.
 
 ## Questions for requirements
 

@@ -38,8 +38,12 @@ public class SpringDataVisitRepositoryImpl implements VisitRepositoryOverride {
 	public void delete(Visit visit) throws DataAccessException {
 		String visitId = visit.getId().toString();
 		this.em.createQuery("DELETE FROM Visit visit WHERE id=" + visitId).executeUpdate();
+        // the row is already gone: unlink and detach the in-memory copy instead of removing it again
         if (em.contains(visit)) {
-            em.remove(visit);
+            if (visit.getPet() != null) {
+                visit.getPet().removeVisit(visit);
+            }
+            em.detach(visit);
         }
 	}
 

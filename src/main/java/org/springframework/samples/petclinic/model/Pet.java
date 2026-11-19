@@ -98,4 +98,12 @@ public class Pet extends NamedEntity {
         visit.setPet(this);
     }
 
+    /**
+     * Unlinks a visit that is being deleted. Without this, JPA's cascade from the pet's visits
+     * re-persists the removed visit at flush time. The visit keeps its pet reference.
+     */
+    public void removeVisit(Visit visit) {
+        getVisitsInternal().remove(visit);
+    }
+
 }

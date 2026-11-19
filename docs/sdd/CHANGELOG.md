@@ -4,6 +4,7 @@ Why the specification changed during the work. Newest first.
 
 | Date | File | Change | Trigger |
 |---|---|---|---|
+| 2026-11-19 | 00-context.md | Added F8: JPA re-persisted deleted pets/visits through the parent's cascade; fixed in the JPA repositories | T4 flush made `shouldDeletePet` / `shouldDeleteVisit` fail on the JPA profiles; the old tests never flushed before checking |
 | 2026-11-19 | 02-design.md | `Retry-After` seconds only; unexpected publisher exceptions park the event | Decided while implementing T3 error handling |
 | 2026-11-19 | 00-context.md | Added F7: `Pet.type` cascade REMOVE breaks pet/owner deletes under JPA; changed to PERSIST, MERGE | T1 flush made `shouldDeleteOwner` fail on the JPA profiles; the old tests had swallowed the exception |
 | 2026-11-19 | 02-design.md | Recording flushes JPA before inserting the event | Found in T1: Hibernate defers UPDATE/DELETE to commit, so without a flush D3's lock-ordering argument does not hold under the JPA profiles |

@@ -11,8 +11,14 @@ import org.springframework.orm.jpa.EntityManagerHolder;
 import org.springframework.samples.petclinic.integration.event.ChangeType;
 import org.springframework.samples.petclinic.integration.event.OwnerDeletedPayloadV1;
 import org.springframework.samples.petclinic.integration.event.OwnerPayloadV1;
+import org.springframework.samples.petclinic.integration.event.PetDeletedPayloadV1;
+import org.springframework.samples.petclinic.integration.event.PetPayloadV1;
 import org.springframework.samples.petclinic.integration.event.RecordType;
+import org.springframework.samples.petclinic.integration.event.VisitDeletedPayloadV1;
+import org.springframework.samples.petclinic.integration.event.VisitPayloadV1;
 import org.springframework.samples.petclinic.model.Owner;
+import org.springframework.samples.petclinic.model.Pet;
+import org.springframework.samples.petclinic.model.Visit;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +55,26 @@ public class ChangeRecorder {
     public void ownerDeleted(Owner owner) {
         record(RecordType.OWNER, owner.getId(), ChangeType.DELETED,
             new OwnerDeletedPayloadV1(owner.getId()), null);
+    }
+
+    public void petSaved(Pet pet, boolean created) {
+        record(RecordType.PET, pet.getId(), created ? ChangeType.CREATED : ChangeType.UPDATED,
+            PetPayloadV1.from(pet), null);
+    }
+
+    public void petDeleted(Pet pet) {
+        record(RecordType.PET, pet.getId(), ChangeType.DELETED,
+            new PetDeletedPayloadV1(pet.getId(), pet.getOwner() == null ? null : pet.getOwner().getId()), null);
+    }
+
+    public void visitSaved(Visit visit, boolean created) {
+        record(RecordType.VISIT, visit.getId(), created ? ChangeType.CREATED : ChangeType.UPDATED,
+            VisitPayloadV1.from(visit), null);
+    }
+
+    public void visitDeleted(Visit visit) {
+        record(RecordType.VISIT, visit.getId(), ChangeType.DELETED,
+            new VisitDeletedPayloadV1(visit.getId(), visit.getPet() == null ? null : visit.getPet().getId()), null);
     }
 
     private void record(RecordType recordType, Integer id, ChangeType change, Object payload, String cause) {

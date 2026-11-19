@@ -101,6 +101,14 @@ public class Owner extends Person {
     }
 
     /**
+     * Unlinks a pet that is being deleted. Without this, JPA's cascade from the owner's pets
+     * re-persists the removed pet at flush time. The pet keeps its owner reference.
+     */
+    public void removePet(Pet pet) {
+        getPetsInternal().remove(pet);
+    }
+
+    /**
      * Return the Pet with the given name, or null if none found for this Owner.
      *
      * @param name to test

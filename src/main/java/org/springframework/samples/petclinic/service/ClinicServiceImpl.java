@@ -82,6 +82,7 @@ public class ClinicServiceImpl implements ClinicService {
     @Transactional
     public void deletePet(Pet pet) throws DataAccessException {
         petRepository.delete(pet);
+        changeRecorder.petDeleted(pet);
     }
 
     @Override
@@ -100,6 +101,7 @@ public class ClinicServiceImpl implements ClinicService {
     @Transactional
     public void deleteVisit(Visit visit) throws DataAccessException {
         visitRepository.delete(visit);
+        changeRecorder.visitDeleted(visit);
     }
 
     @Override
@@ -217,15 +219,18 @@ public class ClinicServiceImpl implements ClinicService {
     @Override
     @Transactional
     public void savePet(Pet pet) throws DataAccessException {
+        boolean created = pet.isNew();
         pet.setType(findPetTypeById(pet.getType().getId()));
         petRepository.save(pet);
+        changeRecorder.petSaved(pet, created);
     }
 
     @Override
     @Transactional
     public void saveVisit(Visit visit) throws DataAccessException {
+        boolean created = visit.isNew();
         visitRepository.save(visit);
-
+        changeRecorder.visitSaved(visit, created);
     }
 
     @Override

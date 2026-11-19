@@ -12,7 +12,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  */
 @ConfigurationProperties("petclinic.integration")
 public record IntegrationProperties(@DefaultValue Publisher publisher, @DefaultValue Relay relay,
-                                    @DefaultValue Retry retry) {
+                                    @DefaultValue Retry retry, @DefaultValue Retention retention) {
 
     public record Publisher(
         @DefaultValue("false") boolean enabled,
@@ -34,5 +34,11 @@ public record IntegrationProperties(@DefaultValue Publisher publisher, @DefaultV
         @DefaultValue("2.0") double multiplier,
         @DefaultValue("10m") Duration maxDelay,
         @DefaultValue("15") int maxAttempts) {
+    }
+
+    /** How long DELIVERED events are kept (NFR-13). PENDING and FAILED events are never purged (NFR-5). */
+    public record Retention(
+        @DefaultValue("7d") Duration delivered,
+        @DefaultValue("1h") Duration purgeInterval) {
     }
 }

@@ -136,6 +136,12 @@ public class OutboxRepository {
             OutboxStatus.PENDING.name(), utc(now), OutboxStatus.FAILED.name());
     }
 
+    /** Deletes DELIVERED events delivered before the cutoff. Never touches PENDING or FAILED (NFR-5). */
+    public int deleteDeliveredBefore(Instant cutoff) {
+        return jdbc.update("DELETE FROM outbox_event WHERE status = ? AND delivered_at < ?",
+            OutboxStatus.DELIVERED.name(), utc(cutoff));
+    }
+
     public long countByStatus(OutboxStatus status) {
         Long count = jdbc.queryForObject("SELECT COUNT(*) FROM outbox_event WHERE status = ?", Long.class, status.name());
         return count == null ? 0 : count;

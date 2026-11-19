@@ -82,7 +82,7 @@ ALTER TABLE roles ADD CONSTRAINT fk_username FOREIGN KEY (username) REFERENCES u
 CREATE INDEX fk_username_idx ON roles (username);
 
 CREATE TABLE outbox_event (
-  id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id              BIGINT GENERATED ALWAYS AS IDENTITY (START WITH 1) PRIMARY KEY,
   event_id        VARCHAR(36)   NOT NULL UNIQUE,
   subject         VARCHAR(64)   NOT NULL,
   event_type      VARCHAR(80)   NOT NULL,

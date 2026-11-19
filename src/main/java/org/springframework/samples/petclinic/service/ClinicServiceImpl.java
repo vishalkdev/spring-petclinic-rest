@@ -21,6 +21,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.orm.ObjectRetrievalFailureException;
 import org.springframework.samples.petclinic.integration.outbox.ChangeRecorder;
+import org.springframework.samples.petclinic.integration.outbox.DeletionPlan;
 import org.springframework.samples.petclinic.model.*;
 import org.springframework.samples.petclinic.repository.*;
 import org.springframework.stereotype.Service;
@@ -81,8 +82,9 @@ public class ClinicServiceImpl implements ClinicService {
     @Override
     @Transactional
     public void deletePet(Pet pet) throws DataAccessException {
+        DeletionPlan deletion = changeRecorder.planPetDeletion(pet);
         petRepository.delete(pet);
-        changeRecorder.petDeleted(pet);
+        changeRecorder.recordDeletion(deletion);
     }
 
     @Override
@@ -146,8 +148,9 @@ public class ClinicServiceImpl implements ClinicService {
     @Override
     @Transactional
     public void deleteOwner(Owner owner) throws DataAccessException {
+        DeletionPlan deletion = changeRecorder.planOwnerDeletion(owner);
         ownerRepository.delete(owner);
-        changeRecorder.ownerDeleted(owner);
+        changeRecorder.recordDeletion(deletion);
     }
 
     @Override
@@ -171,7 +174,9 @@ public class ClinicServiceImpl implements ClinicService {
     @Override
     @Transactional
     public void deletePetType(PetType petType) throws DataAccessException {
+        DeletionPlan deletion = changeRecorder.planPetTypeDeletion(petType);
         petTypeRepository.delete(petType);
+        changeRecorder.recordDeletion(deletion);
     }
 
     @Override

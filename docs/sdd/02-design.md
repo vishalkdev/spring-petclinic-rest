@@ -55,7 +55,7 @@ CREATE INDEX IF NOT EXISTS ix_outbox_due     ON outbox_event (status, next_attem
 CREATE INDEX IF NOT EXISTS ix_outbox_subject ON outbox_event (subject, status, id);
 ```
 
-MySQL uses `AUTO_INCREMENT` and `DATETIME(6)`. Access is through `JdbcTemplate` so it works under every repository profile.
+MySQL uses `AUTO_INCREMENT` and `DATETIME(6)`. HSQLDB needs `START WITH 1` explicitly (its identities otherwise start at 0), so `seq` starts at 1 on every database. Access is through `JdbcTemplate` so it works under every repository profile.
 
 ## Recording
 
@@ -70,7 +70,7 @@ Under JPA it first flushes the persistence context, because Hibernate otherwise 
 | `deleteOwner` | per pet: its visits, then the pet; then `owner.deleted` |
 | `deletePetType` | `visit.deleted` and `pet.deleted` for affected records; no pet type event |
 
-Children are listed before the delete runs and emitted before the parent, with `cause` set to the parent. Pets of a type are found by filtering `findAllPets()`.
+Children are listed before the delete runs (one SQL query on `pets` and `visits`, after a flush) and emitted before the parent, with `cause` set to the parent. The query reads the database instead of entity collections, so it behaves the same under every profile and does not change JPA session state the existing delete code depends on.
 
 ## Event format
 
@@ -157,4 +157,4 @@ No Docker or network needed.
 
 ## Not in this slice
 
-Kafka adapter, pull change feed, request signing, `findByTypeId` query, time-based retry budget, circuit breaker, Flyway, `SKIP LOCKED`, pet type / vet / specialty events, PII filtering.
+Kafka adapter, pull change feed, request signing, time-based retry budget, circuit breaker, Flyway, `SKIP LOCKED`, pet type / vet / specialty events, PII filtering.

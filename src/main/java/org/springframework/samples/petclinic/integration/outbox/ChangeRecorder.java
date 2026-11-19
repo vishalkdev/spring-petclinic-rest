@@ -1,6 +1,8 @@
 package org.springframework.samples.petclinic.integration.outbox;
 
 import java.time.Clock;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -18,6 +20,7 @@ import org.springframework.samples.petclinic.integration.event.VisitDeletedPaylo
 import org.springframework.samples.petclinic.integration.event.VisitPayloadV1;
 import org.springframework.samples.petclinic.model.Owner;
 import org.springframework.samples.petclinic.model.Pet;
+import org.springframework.samples.petclinic.model.PetType;
 import org.springframework.samples.petclinic.model.Visit;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -39,12 +42,15 @@ public class ChangeRecorder {
     private final OutboxRepository outbox;
     private final Clock clock;
     private final ObjectProvider<EntityManagerFactory> entityManagerFactory;
+    private final DependantRecords dependants;
 
     public ChangeRecorder(OutboxRepository outbox, Clock clock,
-                          ObjectProvider<EntityManagerFactory> entityManagerFactory) {
+                          ObjectProvider<EntityManagerFactory> entityManagerFactory,
+                          DependantRecords dependants) {
         this.outbox = outbox;
         this.clock = clock;
         this.entityManagerFactory = entityManagerFactory;
+        this.dependants = dependants;
     }
 
     public void ownerSaved(Owner owner, boolean created) {
@@ -52,19 +58,9 @@ public class ChangeRecorder {
             OwnerPayloadV1.from(owner), null);
     }
 
-    public void ownerDeleted(Owner owner) {
-        record(RecordType.OWNER, owner.getId(), ChangeType.DELETED,
-            new OwnerDeletedPayloadV1(owner.getId()), null);
-    }
-
     public void petSaved(Pet pet, boolean created) {
         record(RecordType.PET, pet.getId(), created ? ChangeType.CREATED : ChangeType.UPDATED,
             PetPayloadV1.from(pet), null);
-    }
-
-    public void petDeleted(Pet pet) {
-        record(RecordType.PET, pet.getId(), ChangeType.DELETED,
-            new PetDeletedPayloadV1(pet.getId(), pet.getOwner() == null ? null : pet.getOwner().getId()), null);
     }
 
     public void visitSaved(Visit visit, boolean created) {
@@ -75,6 +71,58 @@ public class ChangeRecorder {
     public void visitDeleted(Visit visit) {
         record(RecordType.VISIT, visit.getId(), ChangeType.DELETED,
             new VisitDeletedPayloadV1(visit.getId(), visit.getPet() == null ? null : visit.getPet().getId()), null);
+    }
+
+    /** Call before deleting an owner: its pets and their visits go with it. */
+    public DeletionPlan planOwnerDeletion(Owner owner) {
+        String cause = RecordType.OWNER.subject(owner.getId());
+        List<DeletionPlan.PlannedDelete> deletes = new ArrayList<>();
+        flushPendingJpaChanges();
+        for (DependantRecords.PetWithVisits pet : dependants.petsOfOwner(owner.getId())) {
+            addPetWithVisits(deletes, pet, cause, cause);
+        }
+        deletes.add(new DeletionPlan.PlannedDelete(
+            RecordType.OWNER, owner.getId(), new OwnerDeletedPayloadV1(owner.getId()), null));
+        return new DeletionPlan(deletes);
+    }
+
+    /** Call before deleting a pet: its visits go with it. */
+    public DeletionPlan planPetDeletion(Pet pet) {
+        List<DeletionPlan.PlannedDelete> deletes = new ArrayList<>();
+        flushPendingJpaChanges();
+        DependantRecords.PetWithVisits found = dependants.pet(pet.getId());
+        if (found != null) {
+            addPetWithVisits(deletes, found, RecordType.PET.subject(pet.getId()), null);
+        }
+        return new DeletionPlan(deletes);
+    }
+
+    /** Call before deleting a pet type: every pet of that type and their visits go with it. No pet type event (D2). */
+    public DeletionPlan planPetTypeDeletion(PetType petType) {
+        String cause = RecordType.PET_TYPE.subject(petType.getId());
+        List<DeletionPlan.PlannedDelete> deletes = new ArrayList<>();
+        flushPendingJpaChanges();
+        for (DependantRecords.PetWithVisits pet : dependants.petsOfType(petType.getId())) {
+            addPetWithVisits(deletes, pet, cause, cause);
+        }
+        return new DeletionPlan(deletes);
+    }
+
+    /** Call after the delete: records the planned events in order. */
+    public void recordDeletion(DeletionPlan plan) {
+        for (DeletionPlan.PlannedDelete delete : plan.deletes()) {
+            record(delete.recordType(), delete.id(), ChangeType.DELETED, delete.payload(), delete.cause());
+        }
+    }
+
+    private static void addPetWithVisits(List<DeletionPlan.PlannedDelete> deletes,
+                                         DependantRecords.PetWithVisits pet, String visitCause, String petCause) {
+        for (Integer visitId : pet.visitIds()) {
+            deletes.add(new DeletionPlan.PlannedDelete(
+                RecordType.VISIT, visitId, new VisitDeletedPayloadV1(visitId, pet.petId()), visitCause));
+        }
+        deletes.add(new DeletionPlan.PlannedDelete(
+            RecordType.PET, pet.petId(), new PetDeletedPayloadV1(pet.petId(), pet.ownerId()), petCause));
     }
 
     private void record(RecordType recordType, Integer id, ChangeType change, Object payload, String cause) {

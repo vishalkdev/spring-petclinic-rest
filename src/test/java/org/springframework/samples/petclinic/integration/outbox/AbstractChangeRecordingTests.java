@@ -219,7 +219,7 @@ abstract class AbstractChangeRecordingTests {
 
     private long lastEventId() {
         Long id = jdbc.queryForObject("SELECT MAX(id) FROM outbox_event", Long.class);
-        return id == null ? 0 : id;
+        return id == null ? -1 : id; // HSQLDB identities could start at 0, so never use 0 as "none"
     }
 
     private static long sequence(Map<String, Object> event) {

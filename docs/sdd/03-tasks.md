@@ -25,7 +25,7 @@ Status: draft.
 - [x] T2
 - [x] T3
 - [x] T4
-- [ ] T5
+- [x] T5
 - [ ] T6
 - [ ] T7
 - [ ] T8

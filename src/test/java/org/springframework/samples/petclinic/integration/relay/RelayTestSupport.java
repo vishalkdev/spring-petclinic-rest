@@ -26,6 +26,12 @@ final class RelayTestSupport {
         return owner;
     }
 
+    static void updateOwnerCommitted(ClinicService clinicService, PlatformTransactionManager transactionManager,
+                                     Owner owner, String newLastName) {
+        owner.setLastName(newLastName);
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> clinicService.saveOwner(owner));
+    }
+
     static Map<String, Object> latestEvent(JdbcTemplate jdbc, Owner owner) {
         return jdbc.queryForList(
                 "SELECT * FROM outbox_event WHERE subject = ? ORDER BY id DESC", "owner/" + owner.getId())

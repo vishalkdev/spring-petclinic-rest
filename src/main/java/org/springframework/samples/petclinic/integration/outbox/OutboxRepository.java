@@ -49,18 +49,25 @@ public class OutboxRepository {
             timestamp);
     }
 
-    /** Pending events that are due and not leased by a worker, oldest first. */
+    /**
+     * Pending events that are due and not leased by a worker, oldest first. An event is only returned
+     * when no older PENDING event exists for the same subject, which keeps per-record order (NFR-6).
+     * FAILED events are not PENDING, so they never block newer ones (NFR-7).
+     */
     public List<OutboxEvent> findDue(Instant now, int limit) {
         LocalDateTime timestamp = utc(now);
         return jdbc.query(connection -> {
             PreparedStatement statement = connection.prepareStatement(
-                "SELECT " + COLUMNS + " FROM outbox_event "
-                    + "WHERE status = ? AND next_attempt_at <= ? "
-                    + "AND (locked_until IS NULL OR locked_until < ?) "
-                    + "ORDER BY id");
+                "SELECT " + COLUMNS + " FROM outbox_event e "
+                    + "WHERE e.status = ? AND e.next_attempt_at <= ? "
+                    + "AND (e.locked_until IS NULL OR e.locked_until < ?) "
+                    + "AND NOT EXISTS (SELECT 1 FROM outbox_event earlier "
+                    + "WHERE earlier.subject = e.subject AND earlier.status = ? AND earlier.id < e.id) "
+                    + "ORDER BY e.id");
             statement.setString(1, OutboxStatus.PENDING.name());
             statement.setObject(2, timestamp);
             statement.setObject(3, timestamp);
+            statement.setString(4, OutboxStatus.PENDING.name());
             statement.setMaxRows(limit);
             return statement;
         }, OutboxRepository::mapRow);

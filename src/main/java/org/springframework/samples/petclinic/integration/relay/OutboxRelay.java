@@ -1,6 +1,7 @@
 package org.springframework.samples.petclinic.integration.relay;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -8,6 +9,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.samples.petclinic.integration.config.IntegrationProperties;
+import org.springframework.samples.petclinic.integration.observe.OutboxMetrics;
 import org.springframework.samples.petclinic.integration.outbox.OutboxEvent;
 import org.springframework.samples.petclinic.integration.outbox.OutboxRepository;
 import org.springframework.samples.petclinic.integration.publish.EventPublisher;
@@ -29,15 +31,17 @@ public class OutboxRelay {
     private final Clock clock;
     private final IntegrationProperties.Relay settings;
     private final BackoffPolicy backoff;
+    private final OutboxMetrics metrics;
     private final String workerId = "relay-" + UUID.randomUUID();
 
     public OutboxRelay(OutboxRepository outbox, EventPublisher publisher, Clock clock,
-                       IntegrationProperties properties, BackoffPolicy backoff) {
+                       IntegrationProperties properties, BackoffPolicy backoff, OutboxMetrics metrics) {
         this.outbox = outbox;
         this.publisher = publisher;
         this.clock = clock;
         this.settings = properties.relay();
         this.backoff = backoff;
+        this.metrics = metrics;
     }
 
     /** Runs one polling cycle and returns how many events this worker attempted. */
@@ -50,7 +54,9 @@ public class OutboxRelay {
                 continue;
             }
             attempted++;
-            handle(event, publishSafely(event));
+            Instant started = clock.instant();
+            PublishResult result = publishSafely(event);
+            handle(event, result, Duration.between(started, clock.instant()));
         }
         return attempted;
     }
@@ -64,29 +70,33 @@ public class OutboxRelay {
         }
     }
 
-    private void handle(OutboxEvent event, PublishResult result) {
+    private void handle(OutboxEvent event, PublishResult result, Duration took) {
         int attempt = event.attempts() + 1;
         Instant finished = clock.instant();
         switch (result.outcome()) {
             case SUCCESS -> {
                 outbox.markDelivered(event.id(), workerId, finished);
+                metrics.recordPublish(OutboxMetrics.Outcome.SUCCESS, took);
                 log.info("Delivered event {} subject={} type={} attempt={}",
                     event.eventId(), event.subject(), event.eventType(), attempt);
             }
             case RETRYABLE -> {
                 if (attempt >= backoff.maxAttempts()) {
                     outbox.markFailed(event.id(), workerId, result.error());
+                    metrics.recordPublish(OutboxMetrics.Outcome.FAILED, took);
                     log.error("Parked event {} subject={} after {} attempts: {}",
                         event.eventId(), event.subject(), attempt, result.error());
                 } else {
                     Instant next = finished.plus(backoff.delayAfter(attempt, result.retryAfter()));
                     outbox.recordFailedAttempt(event.id(), workerId, result.error(), next);
+                    metrics.recordPublish(OutboxMetrics.Outcome.RETRY, took);
                     log.warn("Delivery failed for event {} subject={} attempt={}, retry at {}: {}",
                         event.eventId(), event.subject(), attempt, next, result.error());
                 }
             }
             case PERMANENT -> {
                 outbox.markFailed(event.id(), workerId, result.error());
+                metrics.recordPublish(OutboxMetrics.Outcome.FAILED, took);
                 log.error("Parked event {} subject={} on permanent error at attempt {}: {}",
                     event.eventId(), event.subject(), attempt, result.error());
             }

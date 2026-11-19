@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.samples.petclinic.integration.config.IntegrationProperties;
+import org.springframework.samples.petclinic.integration.observe.OutboxMetrics;
 import org.springframework.samples.petclinic.integration.outbox.OutboxRepository;
 import org.springframework.samples.petclinic.integration.publish.EventPublisher;
 import org.springframework.samples.petclinic.model.Owner;
@@ -72,6 +73,9 @@ class RelayOrderingTests {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private OutboxMetrics metrics;
 
     @BeforeEach
     void acceptOtherEvents() {
@@ -161,7 +165,7 @@ class RelayOrderingTests {
     private OutboxRelay relay(Clock clock) {
         IntegrationProperties.Retry retry =
             new IntegrationProperties.Retry(Duration.ofSeconds(2), 2.0, Duration.ofMinutes(10), 15);
-        return new OutboxRelay(outbox, publisher, clock, properties, new BackoffPolicy(retry, () -> 1.0));
+        return new OutboxRelay(outbox, publisher, clock, properties, new BackoffPolicy(retry, () -> 1.0), metrics);
     }
 
     private void stubFailsOnceThenSucceeds(String eventId) {

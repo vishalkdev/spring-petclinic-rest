@@ -104,6 +104,17 @@ public class OutboxRepository {
             OutboxStatus.FAILED.name(), truncate(error), id, workerId);
     }
 
+    public long countByStatus(OutboxStatus status) {
+        Long count = jdbc.queryForObject("SELECT COUNT(*) FROM outbox_event WHERE status = ?", Long.class, status.name());
+        return count == null ? 0 : count;
+    }
+
+    /** Creation time of the oldest PENDING event, or null when nothing is pending. */
+    public Instant oldestPendingCreatedAt() {
+        return instant(jdbc.queryForObject("SELECT MIN(created_at) FROM outbox_event WHERE status = ?",
+            LocalDateTime.class, OutboxStatus.PENDING.name()));
+    }
+
     private static OutboxEvent mapRow(ResultSet rs, int rowNum) throws SQLException {
         return new OutboxEvent(
             rs.getLong("id"),

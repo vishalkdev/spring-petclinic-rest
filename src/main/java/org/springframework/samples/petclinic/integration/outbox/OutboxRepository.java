@@ -89,6 +89,14 @@ public class OutboxRepository {
             truncate(error), utc(nextAttemptAt), id, workerId);
     }
 
+    /** Parks the event as FAILED (permanent error or retries exhausted) and releases the lease. */
+    public void markFailed(long id, String workerId, String error) {
+        jdbc.update(
+            "UPDATE outbox_event SET status = ?, attempts = attempts + 1, last_error = ?, "
+                + "locked_until = NULL, locked_by = NULL WHERE id = ? AND locked_by = ?",
+            OutboxStatus.FAILED.name(), truncate(error), id, workerId);
+    }
+
     private static OutboxEvent mapRow(ResultSet rs, int rowNum) throws SQLException {
         return new OutboxEvent(
             rs.getLong("id"),

@@ -3,6 +3,7 @@ package org.springframework.samples.petclinic.integration.publish;
 import java.net.URI;
 import java.net.http.HttpClient;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -15,7 +16,8 @@ import org.springframework.web.client.RestClientException;
 
 /**
  * POSTs one event to the configured webhook. Never throws: every outcome becomes a
- * {@link PublishResult}. Error classification is refined in T3.
+ * {@link PublishResult}: HTTP responses via {@link HttpResponseClassifier}, network errors and
+ * timeouts as retryable.
  */
 @Component
 public class HttpWebhookPublisher implements EventPublisher {
@@ -40,7 +42,7 @@ public class HttpWebhookPublisher implements EventPublisher {
     @Override
     public PublishResult publish(OutboxEvent event) {
         try {
-            ResponseEntity<Void> response = client.post()
+            ResponseEntity<String> response = client.post()
                 .uri(endpoint)
                 .contentType(CLOUDEVENTS_JSON)
                 .header(IDEMPOTENCY_KEY, event.eventId())
@@ -54,11 +56,11 @@ public class HttpWebhookPublisher implements EventPublisher {
                 .onStatus(status -> true, (request, httpResponse) -> {
                     // every status is handled below instead of being thrown
                 })
-                .toBodilessEntity();
-            if (response.getStatusCode().is2xxSuccessful()) {
-                return PublishResult.success();
-            }
-            return PublishResult.retryable("HTTP " + response.getStatusCode().value());
+                .toEntity(String.class);
+            return HttpResponseClassifier.classify(
+                response.getStatusCode().value(),
+                response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER),
+                response.getBody());
         } catch (RestClientException e) {
             return PublishResult.retryable(e.getClass().getSimpleName() + ": " + e.getMessage());
         }

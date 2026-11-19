@@ -115,6 +115,8 @@ The "no older PENDING event" rule keeps per-record order. A `FAILED` event is no
 
 - Retryable: connection/IO errors, timeouts, 408, 425, 429, 5xx (respect `Retry-After`)
 - Permanent: 3xx and other 4xx
+- Only the seconds form of `Retry-After` is read; an HTTP-date value is ignored.
+- An unexpected exception while building or sending an event (for example a payload that cannot be serialised) parks it, because retrying would fail the same way.
 
 Backoff: random value between 0 and `min(10 min, 2 s × 2^(attempts-1))`. After 15 attempts the event is parked (about an hour of failures).
 

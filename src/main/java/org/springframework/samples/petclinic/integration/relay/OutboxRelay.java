@@ -15,8 +15,9 @@ import org.springframework.samples.petclinic.integration.publish.PublishResult;
 import org.springframework.stereotype.Component;
 
 /**
- * Publishes due events (FR-8, FR-9). Not transactional on purpose: claiming, publishing and
- * recording the outcome are separate steps, so no DB transaction is open during HTTP I/O.
+ * Publishes due events (FR-8, FR-9) and handles failures (NFR-3, NFR-4). Not transactional on
+ * purpose: claiming, publishing and recording the outcome are separate steps, so no DB
+ * transaction is open during HTTP I/O.
  */
 @Component
 public class OutboxRelay {
@@ -27,14 +28,16 @@ public class OutboxRelay {
     private final EventPublisher publisher;
     private final Clock clock;
     private final IntegrationProperties.Relay settings;
+    private final BackoffPolicy backoff;
     private final String workerId = "relay-" + UUID.randomUUID();
 
     public OutboxRelay(OutboxRepository outbox, EventPublisher publisher, Clock clock,
-                       IntegrationProperties properties) {
+                       IntegrationProperties properties, BackoffPolicy backoff) {
         this.outbox = outbox;
         this.publisher = publisher;
         this.clock = clock;
         this.settings = properties.relay();
+        this.backoff = backoff;
     }
 
     /** Runs one polling cycle and returns how many events this worker attempted. */
@@ -47,19 +50,47 @@ public class OutboxRelay {
                 continue;
             }
             attempted++;
-            PublishResult result = publisher.publish(event);
-            Instant finished = clock.instant();
-            if (result.isSuccess()) {
-                outbox.markDelivered(event.id(), workerId, finished);
-                log.info("Delivered event {} subject={} type={} attempt={}",
-                    event.eventId(), event.subject(), event.eventType(), event.attempts() + 1);
-            } else {
-                outbox.recordFailedAttempt(event.id(), workerId, result.error(), finished);
-                log.warn("Delivery failed for event {} subject={} attempt={}: {}",
-                    event.eventId(), event.subject(), event.attempts() + 1, result.error());
-            }
+            handle(event, publishSafely(event));
         }
         return attempted;
+    }
+
+    private PublishResult publishSafely(OutboxEvent event) {
+        try {
+            return publisher.publish(event);
+        } catch (RuntimeException e) {
+            // e.g. a payload that cannot be serialised: retrying would fail the same way
+            return PublishResult.permanent("Unexpected " + e.getClass().getSimpleName() + ": " + e.getMessage());
+        }
+    }
+
+    private void handle(OutboxEvent event, PublishResult result) {
+        int attempt = event.attempts() + 1;
+        Instant finished = clock.instant();
+        switch (result.outcome()) {
+            case SUCCESS -> {
+                outbox.markDelivered(event.id(), workerId, finished);
+                log.info("Delivered event {} subject={} type={} attempt={}",
+                    event.eventId(), event.subject(), event.eventType(), attempt);
+            }
+            case RETRYABLE -> {
+                if (attempt >= backoff.maxAttempts()) {
+                    outbox.markFailed(event.id(), workerId, result.error());
+                    log.error("Parked event {} subject={} after {} attempts: {}",
+                        event.eventId(), event.subject(), attempt, result.error());
+                } else {
+                    Instant next = finished.plus(backoff.delayAfter(attempt, result.retryAfter()));
+                    outbox.recordFailedAttempt(event.id(), workerId, result.error(), next);
+                    log.warn("Delivery failed for event {} subject={} attempt={}, retry at {}: {}",
+                        event.eventId(), event.subject(), attempt, next, result.error());
+                }
+            }
+            case PERMANENT -> {
+                outbox.markFailed(event.id(), workerId, result.error());
+                log.error("Parked event {} subject={} on permanent error at attempt {}: {}",
+                    event.eventId(), event.subject(), attempt, result.error());
+            }
+        }
     }
 
     public String workerId() {

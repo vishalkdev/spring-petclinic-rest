@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.SqlParameterValue;
@@ -102,6 +103,37 @@ public class OutboxRepository {
             "UPDATE outbox_event SET status = ?, attempts = attempts + 1, last_error = ?, "
                 + "locked_until = NULL, locked_by = NULL WHERE id = ? AND locked_by = ?",
             OutboxStatus.FAILED.name(), truncate(error), id, workerId);
+    }
+
+    public List<OutboxEvent> findByStatus(OutboxStatus status, int limit) {
+        return jdbc.query(connection -> {
+            PreparedStatement statement = connection.prepareStatement(
+                "SELECT " + COLUMNS + " FROM outbox_event WHERE status = ? ORDER BY id");
+            statement.setString(1, status.name());
+            statement.setMaxRows(limit);
+            return statement;
+        }, OutboxRepository::mapRow);
+    }
+
+    public Optional<OutboxEvent> findById(long id) {
+        return jdbc.query("SELECT " + COLUMNS + " FROM outbox_event WHERE id = ?", OutboxRepository::mapRow, id)
+            .stream().findFirst();
+    }
+
+    /** Puts one FAILED event back to PENDING with zero attempts (NFR-10). Returns false if it is not FAILED. */
+    public boolean requeueFailed(long id, Instant now) {
+        return jdbc.update(
+            "UPDATE outbox_event SET status = ?, attempts = 0, next_attempt_at = ?, locked_until = NULL, locked_by = NULL "
+                + "WHERE id = ? AND status = ?",
+            OutboxStatus.PENDING.name(), utc(now), id, OutboxStatus.FAILED.name()) == 1;
+    }
+
+    /** Puts every FAILED event back to PENDING with zero attempts. Returns how many were re-queued. */
+    public int requeueAllFailed(Instant now) {
+        return jdbc.update(
+            "UPDATE outbox_event SET status = ?, attempts = 0, next_attempt_at = ?, locked_until = NULL, locked_by = NULL "
+                + "WHERE status = ?",
+            OutboxStatus.PENDING.name(), utc(now), OutboxStatus.FAILED.name());
     }
 
     public long countByStatus(OutboxStatus status) {

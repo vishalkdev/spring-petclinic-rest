@@ -29,6 +29,8 @@ tags:
     description: Endpoints related to pet types.
   - name: specialties
     description: Endpoints related to vet specialties.
+  - name: integration-admin
+    description: Operator endpoints for the change integration outbox (list and re-queue events).
 paths:
   /oops:
     get:
@@ -1895,8 +1897,177 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
+  /admin/outbox/events:
+    get:
+      tags:
+        - integration-admin
+      operationId: listOutboxEvents
+      summary: List outbox events by status
+      description: Returns events in the given status, oldest first. Use status FAILED to see parked events.
+      parameters:
+        - name: status
+          in: query
+          description: Event status.
+          required: false
+          schema:
+            type: string
+            enum: [PENDING, DELIVERED, FAILED]
+            default: FAILED
+        - name: limit
+          in: query
+          description: Maximum number of events to return.
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 500
+            default: 50
+      responses:
+        200:
+          description: Events found.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OutboxEvent'
+        400:
+          description: Bad request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        500:
+          description: Server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+  /admin/outbox/events/{id}/retry:
+    post:
+      tags:
+        - integration-admin
+      operationId: retryOutboxEvent
+      summary: Re-queue one failed event
+      description: Sets a FAILED event back to PENDING with zero attempts so the relay delivers it again. The event keeps its event id and sequence.
+      parameters:
+        - name: id
+          in: path
+          description: The event's sequence number (outbox row id).
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+            example: 42
+      responses:
+        200:
+          description: Event re-queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutboxEvent'
+        404:
+          description: Event not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        409:
+          description: Event is not FAILED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        500:
+          description: Server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+  /admin/outbox/events/retry-failed:
+    post:
+      tags:
+        - integration-admin
+      operationId: retryFailedOutboxEvents
+      summary: Re-queue all failed events
+      description: Sets every FAILED event back to PENDING with zero attempts.
+      responses:
+        200:
+          description: Number of events re-queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutboxRetryResult'
+        500:
+          description: Server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
 components:
   schemas:
+    OutboxEvent:
+      title: Outbox event
+      description: A change event waiting for, or done with, delivery to the external system.
+      type: object
+      properties:
+        id:
+          description: Sequence number; also the outbox row id.
+          type: integer
+          format: int64
+          example: 42
+        eventId:
+          description: Unique event id, sent as the CloudEvents id and Idempotency-Key.
+          type: string
+          example: 6f1c2e0a-8a1b-4c7e-9d0f-2a4b6c8d0b91
+        subject:
+          type: string
+          example: owner/7
+        type:
+          type: string
+          example: petclinic.owner.updated.v1
+        cause:
+          description: Parent subject for a cascaded delete.
+          type: string
+          example: owner/6
+        status:
+          description: PENDING, DELIVERED or FAILED.
+          type: string
+          example: FAILED
+        attempts:
+          type: integer
+          format: int32
+          example: 1
+        lastError:
+          type: string
+          example: 'HTTP 400: missing field type'
+        createdAt:
+          type: string
+          format: date-time
+        nextAttemptAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - eventId
+        - subject
+        - type
+        - status
+        - attempts
+        - createdAt
+    OutboxRetryResult:
+      title: Outbox retry result
+      type: object
+      properties:
+        requeued:
+          description: Number of events set back to PENDING.
+          type: integer
+          format: int32
+          example: 3
+      required:
+        - requeued
     ProblemDetail:
       title: Problem Detail
       description: The schema for all error responses.

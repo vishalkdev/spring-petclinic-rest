@@ -79,7 +79,7 @@ EARS style. "Verify" names the planned evidence; concrete tests are listed in `0
 | FR-4 | The system shall record events for these changes under every repository profile (`jdbc`, `jpa`, `spring-data-jpa`). | Integration run on ≥2 profiles |
 | FR-5 | For create and update, the change event shall carry a full snapshot of the record's state after the change. For delete, it shall carry the record id and its parent reference. | Unit (mapper) + integration |
 | FR-6 | Each change event shall carry: event id, event type with a version suffix (e.g. `petclinic.owner.updated.v1`), subject, sequence, time of recording, payload, and `cause` when applicable. | Unit (envelope) |
-| FR-7 | A snapshot shall reference related records by id only (Pet → `ownerId`, `typeId`; Visit → `petId`) and shall not embed them. | Unit (mapper) |
+| FR-7 | A snapshot shall reference related records by id only (Pet → `ownerId`, `typeId`; Visit → `petId`) and shall not embed them. Exception: a Pet snapshot also carries `typeName`, because PetType events are out of scope (D2) and `typeId` alone could not be interpreted. | Unit (mapper) |
 | FR-8 | The system shall publish every recorded event to the external system asynchronously, at least once, unless the event is Failed. | End-to-end with a stub external system |
 | FR-9 | When the external system acknowledges an event, the system shall mark it Delivered and shall not publish it again in normal operation. | End-to-end |
 

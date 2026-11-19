@@ -8,6 +8,64 @@
 This backend version of the Spring Petclinic application only provides a REST API. **There is no UI**.
 The [spring-petclinic-angular project](https://github.com/spring-petclinic/spring-petclinic-angular) is a Angular front-end application which consumes the REST API.
 
+## Change integration (take-home assignment)
+
+This fork sends changes to owners, pets and visits to an external system through a transactional outbox.
+
+- Approach and trade-offs: [docs/APPROACH.md](docs/APPROACH.md)
+- Contract for the external system: [docs/integration-contract.md](docs/integration-contract.md)
+- Spec-driven development artifacts: [docs/sdd/](docs/sdd/) (context, requirements, design, tasks, verification, changelog) and [docs/adr/](docs/adr/)
+- AI usage: [docs/AI_USAGE.md](docs/AI_USAGE.md)
+
+### Build and test
+
+```
+./mvnw clean install
+```
+
+Needs Java 17+ only. No Docker, network access or credentials. The integration tests use an in-process WireMock stub.
+
+### Run with a stub external system
+
+1. Build once (above), then start WireMock from your local Maven cache and make it accept events:
+   ```
+   java -jar ~/.m2/repository/org/wiremock/wiremock-standalone/3.13.1/wiremock-standalone-3.13.1.jar --port 8089
+   curl -X POST localhost:8089/__admin/mappings \
+     -d '{"request":{"method":"POST","url":"/events"},"response":{"status":200}}'
+   ```
+2. Start PetClinic with publishing on, and health details and metrics exposed:
+   ```
+   ./mvnw spring-boot:run -Dspring-boot.run.arguments="--petclinic.integration.publisher.enabled=true \
+     --management.endpoint.health.show-details=always --management.endpoints.web.exposure.include=health,metrics"
+   ```
+3. Create an owner and see the event arrive:
+   ```
+   curl -X POST localhost:9966/petclinic/api/owners -H 'Content-Type: application/json' \
+     -d '{"firstName":"Ada","lastName":"Lovelace","address":"1 Main St","city":"London","telephone":"0123456789"}'
+   curl localhost:8089/__admin/requests
+   ```
+4. Stop WireMock, create another owner, then look at the backlog:
+   ```
+   curl 'localhost:9966/petclinic/api/admin/outbox/events?status=PENDING'
+   curl localhost:9966/petclinic/actuator/health
+   curl localhost:9966/petclinic/actuator/metrics/petclinic.outbox.oldest.pending.age
+   ```
+5. Re-queue parked events: `curl -X POST localhost:9966/petclinic/api/admin/outbox/events/retry-failed`
+
+### Settings (`petclinic.integration.*`)
+
+| Property | Default |
+|---|---|
+| `publisher.enabled` | `false` (changes are still recorded) |
+| `publisher.endpoint` | `http://localhost:8089/events` |
+| `publisher.connect-timeout` / `read-timeout` | `2s` / `5s` |
+| `publisher.auth-token` | empty (sent as a bearer token when set) |
+| `relay.poll-interval` / `batch-size` / `lease` | `1s` / `50` / `60s` |
+| `retry.initial-delay` / `multiplier` / `max-delay` / `max-attempts` | `2s` / `2.0` / `10m` / `15` |
+| `retention.delivered` / `purge-interval` | `7d` / `1h` |
+
+With `petclinic.security.enable=true`, the admin endpoints need the `ADMIN` role.
+
 ## Understanding the Spring Petclinic application with a few diagrams
 
 [See the presentation of the Spring Petclinic Framework version](http://fr.slideshare.net/AntoineRey/spring-framework-petclinic-sample-application)
